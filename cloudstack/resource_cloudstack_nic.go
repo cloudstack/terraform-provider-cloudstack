@@ -33,6 +33,9 @@ func resourceCloudStackNIC() *schema.Resource {
 		Create: resourceCloudStackNICCreate,
 		Read:   resourceCloudStackNICRead,
 		Delete: resourceCloudStackNICDelete,
+		Importer: &schema.ResourceImporter{
+			State: importStateNIC,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"network_id": {
@@ -57,6 +60,12 @@ func resourceCloudStackNIC() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 				Computed: true,
+				ForceNew: true,
+			},
+
+			"project": {
+				Type:     schema.TypeString,
+				Optional: true,
 				ForceNew: true,
 			},
 		},
@@ -107,8 +116,13 @@ func resourceCloudStackNICCreate(d *schema.ResourceData, meta interface{}) error
 func resourceCloudStackNICRead(d *schema.ResourceData, meta interface{}) error {
 	cs := meta.(*cloudstack.CloudStackClient)
 
-	// Get the virtual machine details
-	vm, count, err := cs.VirtualMachine.GetVirtualMachineByID(d.Get("virtual_machine_id").(string))
+	// Get the virtual machine details. Instances that belong to a project are
+	// not returned by listVirtualMachines unless the project is passed along,
+	// so scope the lookup the same way the instance resource does.
+	vm, count, err := cs.VirtualMachine.GetVirtualMachineByID(
+		d.Get("virtual_machine_id").(string),
+		cloudstack.WithProject(d.Get("project").(string)),
+	)
 	if err != nil {
 		if count == 0 {
 			log.Printf("[DEBUG] Instance %s does no longer exist", d.Get("virtual_machine_id").(string))
@@ -163,6 +177,30 @@ func resourceCloudStackNICDelete(d *schema.ResourceData, meta interface{}) error
 	}
 
 	return nil
+}
+
+// importStateNIC imports a NIC using "<virtual_machine_id>/<nic_id>", or
+// "<project>/<virtual_machine_id>/<nic_id>" when the instance belongs to a
+// project. The parent instance cannot be derived from the NIC ID alone, so the
+// generic passthrough importer is not usable here.
+func importStateNIC(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	s := strings.Split(d.Id(), "/")
+
+	switch len(s) {
+	case 2:
+		d.Set("virtual_machine_id", s[0])
+		d.SetId(s[1])
+	case 3:
+		d.Set("project", s[0])
+		d.Set("virtual_machine_id", s[1])
+		d.SetId(s[2])
+	default:
+		return nil, fmt.Errorf(
+			"invalid import ID %q, expected <virtual_machine_id>/<nic_id> or "+
+				"<project>/<virtual_machine_id>/<nic_id>", d.Id())
+	}
+
+	return []*schema.ResourceData{d}, nil
 }
 
 func retryableAddNicFunc(cs *cloudstack.CloudStackClient, p *cloudstack.AddNicToVirtualMachineParams) func() (interface{}, error) {

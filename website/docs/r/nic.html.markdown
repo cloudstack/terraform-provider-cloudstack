@@ -50,6 +50,11 @@ The following arguments are supported:
 * `virtual_machine_id` - (Required) The ID of the virtual machine to which to
     attach the NIC. Changing this forces a new resource to be created.
 
+* `project` - (Optional) The name or ID of the project the virtual machine
+    belongs to. Required when the virtual machine belongs to a project,
+    otherwise the NIC cannot be read back. Changing this forces a new resource
+    to be created.
+
 ## Attributes Reference
 
 The following attributes are exported:
@@ -57,3 +62,17 @@ The following attributes are exported:
 * `id` - The ID of the NIC.
 * `ip_address` - The assigned IP address.
 * `mac_address` - The assigned MAC address.
+
+## Import
+
+NICs can be imported using `<virtual_machine_id>/<nic_id>`, e.g.
+
+```shell
+$ terraform import cloudstack_nic.test f8141e2f-4e7e-4c63-9362-986c908b7ea7/2b1a4b3c-5d6e-4f70-8192-a3b4c5d6e7f8
+```
+
+When the virtual machine belongs to a project, prefix the project:
+
+```shell
+$ terraform import cloudstack_nic.test my-project/f8141e2f-4e7e-4c63-9362-986c908b7ea7/2b1a4b3c-5d6e-4f70-8192-a3b4c5d6e7f8
+```
